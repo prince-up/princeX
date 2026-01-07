@@ -92,39 +92,37 @@ const SessionView = () => {
 
   const startScreenShare = async () => {
     try {
-      // Request Chrome extension to start capture
-      window.postMessage({ type: 'PRINCEX_START_CAPTURE', sessionId }, '*');
-
-      // Listen for stream from extension
-      window.addEventListener('message', async (event) => {
-        if (event.data.type === 'PRINCEX_STREAM_ID') {
-          const streamId = event.data.streamId;
-          
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: streamId,
-              },
-            },
-          });
-
-          setLocalStream(stream);
-          await webrtcService.addVideoStream(stream);
-          await webrtcService.createOffer(sessionId);
-          setIsOwner(true);
-
-          // Show local preview
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        }
+      // Modern screen sharing API
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: "always"
+        },
+        audio: false
       });
+
+      setLocalStream(stream);
+      await webrtcService.addVideoStream(stream);
+      await webrtcService.createOffer(sessionId);
+      setIsOwner(true);
+
+      // Show local preview
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // Handle stream stop (user clicks "Stop sharing" in browser UI)
+      stream.getVideoTracks()[0].onended = () => {
+        endSession();
+      };
 
     } catch (error) {
       console.error('Screen share error:', error);
-      alert('Failed to start screen sharing. Make sure the Chrome extension is installed.');
+      if (error.name === 'NotAllowedError') {
+        alert('Permission to share screen was denied.');
+      } else {
+        alert('Failed to start screen sharing: ' + error.message);
+      }
+      navigate('/owner');
     }
   };
 
