@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { sessionAPI, trustAPI } from '../../services/api';
+import socketService from '../../services/socket';
 import { QRCodeSVG } from 'qrcode.react';
 
 const OwnerDashboard = () => {
@@ -42,6 +43,18 @@ const OwnerDashboard = () => {
         },
       });
       console.log('Session created:', response.data);
+
+      // Connect to socket and join room immediately
+      const sessionId = response.data.session._id;
+      socketService.connect();
+      socketService.joinRoom(sessionId, 'host');
+
+      // Listen for controller joining
+      socketService.on('user-joined', () => {
+        console.log('Controller joined, navigating to session...');
+        navigate(`/session/${sessionId}`);
+      });
+
       setQRData(response.data.session);
       setShowQR(true);
     } catch (error) {
@@ -128,9 +141,9 @@ const OwnerDashboard = () => {
             <div className="bg-white p-8 rounded-lg max-w-md w-full">
               <h3 className="text-2xl font-bold mb-4">Scan QR Code</h3>
               <div className="flex justify-center mb-4">
-                <QRCodeSVG 
-                  value={`${window.location.origin}/controller?token=${qrData.sessionToken}`} 
-                  size={256} 
+                <QRCodeSVG
+                  value={`${window.location.origin}/controller?token=${qrData.sessionToken}`}
+                  size={256}
                 />
               </div>
               <p className="text-sm text-gray-600 mb-2">
@@ -185,7 +198,7 @@ const OwnerDashboard = () => {
           {/* Trusted Emails */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold mb-4">Trusted Access</h2>
-            
+
             <form onSubmit={addTrustedEmail} className="mb-4">
               <div className="flex gap-2">
                 <input
