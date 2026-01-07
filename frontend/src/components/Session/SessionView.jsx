@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import socketService from '../../services/socket';
 import webrtcService from '../../services/webrtc';
 import { sessionAPI } from '../../services/api';
@@ -34,6 +34,8 @@ const SessionView = () => {
     };
   }, [sessionId]);
 
+  const { state } = useLocation();
+
   const initializeSession = async () => {
     try {
       addLog('Initializing session...');
@@ -54,6 +56,12 @@ const SessionView = () => {
 
       // Check if Chrome extension is installed
       window.postMessage({ type: 'PRINCEX_CHECK' }, '*');
+
+      // Auto-start if triggered from Dashboard
+      if (state?.autoStart) {
+        addLog('Auto-starting screen share...');
+        startScreenShare();
+      }
 
     } catch (error) {
       console.error('Session init error:', error);
