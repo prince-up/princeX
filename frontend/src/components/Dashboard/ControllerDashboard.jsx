@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { sessionAPI, trustAPI } from '../../services/api';
 
@@ -7,11 +7,31 @@ const ControllerDashboard = () => {
   const { user, device, logout } = useAuth();
   const [availableDevices, setAvailableDevices] = useState([]);
   const [sessionToken, setSessionToken] = useState('');
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadAvailableDevices();
-  }, []);
+    
+    // Auto-join if token in URL (from QR scan)
+    const tokenFromUrl = searchParams.get('token');
+    if (tokenFromUrl && device) {
+      setSessionToken(tokenFromUrl);
+      joinByTokenDirect(tokenFromUrl);
+    }
+  }, [device]);
+
+  const joinByTokenDirect = async (token) => {
+    try {
+      const response = await sessionAPI.join({
+        sessionToken: token,
+        deviceId: device._id,
+      });
+      navigate(`/session/${response.data.session.id}`);
+    } catch (error) {
+      alert('Failed to join session: ' + (error.response?.data?.error || 'Unknown error'));
+    }
+  };
 
   const loadAvailableDevices = async () => {
     try {

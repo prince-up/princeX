@@ -128,7 +128,10 @@ const OwnerDashboard = () => {
             <div className="bg-white p-8 rounded-lg max-w-md w-full">
               <h3 className="text-2xl font-bold mb-4">Scan QR Code</h3>
               <div className="flex justify-center mb-4">
-                <QRCodeSVG value={qrData.sessionToken} size={256} />
+                <QRCodeSVG 
+                  value={`${window.location.origin}/controller?token=${qrData.sessionToken}`} 
+                  size={256} 
+                />
               </div>
               <p className="text-sm text-gray-600 mb-2">
                 Session Token: <code className="bg-gray-100 px-2 py-1 rounded">{qrData.sessionToken}</code>
