@@ -7,13 +7,14 @@ import { sessionAPI } from '../../services/api';
 const SessionView = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const { state } = useLocation();
   const videoRef = useRef(null);
   const [isOwner, setIsOwner] = useState(false);
   const [connectionState, setConnectionState] = useState('connecting');
   const [localStream, setLocalStream] = useState(null);
   const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef(null);
   const [logs, setLogs] = useState([]);
+  const controlsTimeoutRef = useRef(null);
 
   const addLog = (msg) => {
     setLogs(prev => [...prev.slice(-4), msg]); // Keep last 5 logs
@@ -33,8 +34,6 @@ const SessionView = () => {
       cleanup();
     };
   }, [sessionId]);
-
-  const { state } = useLocation();
 
   const initializeSession = async () => {
     try {
@@ -60,7 +59,10 @@ const SessionView = () => {
       // Auto-start if triggered from Dashboard
       if (state?.autoStart) {
         addLog('Auto-starting screen share...');
-        startScreenShare();
+        // Small delay to ensure everything is ready
+        setTimeout(() => startScreenShare(), 1000);
+      } else {
+        addLog('Ready. Waiting for connection...');
       }
 
     } catch (error) {
@@ -90,8 +92,8 @@ const SessionView = () => {
       setConnectionState(pc.connectionState);
       addLog(`Conn: ${pc.connectionState}`);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        // alert('Connection lost');
-        // navigate('/owner');
+        // Keep logs visible if disconnected
+        setShowControls(true);
       }
     };
   };
@@ -115,21 +117,23 @@ const SessionView = () => {
 
     socketService.on('session-ended', () => {
       addLog('Session Ended');
-      alert('Session ended by host');
+      alert('Session ended');
       navigate('/owner');
     });
 
     socketService.on('user-joined', () => {
       addLog('User Joined');
-      console.log('Another user joined');
-      startScreenShare();
+      // If we are the host and someone joins, we start sharing
+      // But we check if we already have a stream to avoid redundant requests
+      if (!localStream) {
+        startScreenShare();
+      }
     });
 
     // Handle remote control events (Host side)
     socketService.on('control-event', ({ event }) => {
       console.log('Received control event:', event);
 
-      // Pass to extension for execution
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
@@ -147,12 +151,9 @@ const SessionView = () => {
 
   const startScreenShare = async () => {
     try {
-      addLog('Sharing screen...');
-      // Modern screen sharing API
+      addLog('Starting Share...');
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          cursor: "always"
-        },
+        video: { cursor: "always" },
         audio: false
       });
 
@@ -162,34 +163,25 @@ const SessionView = () => {
       addLog('Offer Sent');
       setIsOwner(true);
 
-      // Show local preview
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      // Handle stream stop (user clicks "Stop sharing" in browser UI)
       stream.getVideoTracks()[0].onended = () => {
         endSession();
       };
 
     } catch (error) {
       console.error('Screen share error:', error);
-      addLog(`Share Error: ${error.message}`);
-      if (error.name === 'NotAllowedError') {
-        alert('Permission to share screen was denied.');
-      } else {
-        alert('Failed to start screen sharing: ' + error.message);
+      addLog(`Error: ${error.message}`);
+      if (error.name !== 'NotAllowedError') {
+        alert('Failed to start sharing: ' + error.message);
       }
-      navigate('/owner');
     }
   };
 
-  const handleMouseMove = (e) => {
-    // Optimization: Don't send every mouse move
-  };
-
   const handleMouseClick = (e) => {
-    if (!isOwner) {
+    if (!isOwner && videoRef.current) {
       const rect = videoRef.current.getBoundingClientRect();
       const videoRatio = videoRef.current.videoWidth / videoRef.current.videoHeight;
       const elementRatio = rect.width / rect.height;
@@ -208,7 +200,6 @@ const SessionView = () => {
         finalTop = rect.top + (rect.height - finalHeight) / 2;
       }
 
-      // Check if click is within video bounds
       if (e.clientX >= finalLeft && e.clientX <= finalLeft + finalWidth &&
         e.clientY >= finalTop && e.clientY <= finalTop + finalHeight) {
 
@@ -230,7 +221,7 @@ const SessionView = () => {
       await sessionAPI.end(sessionId);
       navigate('/owner');
     } catch (error) {
-      console.error('End session error:', error);
+      navigate('/owner');
     }
   };
 
@@ -248,45 +239,48 @@ const SessionView = () => {
       onMouseMove={handleUserInteraction}
       onTouchStart={handleUserInteraction}
     >
-      {/* Video - Full Screen */}
       <div className="absolute inset-0 flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           className={`w-full h-full object-contain ${!isOwner ? 'cursor-none' : ''}`}
-          style={{ objectFit: 'contain' }}
-          onMouseMove={handleMouseMove}
           onClick={handleMouseClick}
         />
       </div>
 
-      {/* Floating Controls Overlay - Auto Hide */}
       <div
-        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-start transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <div className="pointer-events-auto">
-          <div className="bg-black/50 backdrop-blur-sm p-2 rounded-lg text-white">
-            <h2 className="text-sm font-bold">PrinceX</h2>
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-green-400 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+          <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white min-w-[150px]">
+            <h2 className="text-sm font-bold tracking-tight">PrinceX</h2>
+            <div className="mt-1 flex flex-col gap-1">
+              <p className="text-[10px] text-green-400 flex items-center gap-1 font-medium uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                 {connectionState}
               </p>
-              {/* Debug Logs */}
-              <div className="text-[10px] text-gray-300 font-mono">
+              <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1">
                 {logs.map((log, i) => (
-                  <div key={i}>{log}</div>
+                  <div key={i} className="text-[9px] text-gray-400 font-mono leading-tight">{log}</div>
                 ))}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto flex items-center gap-2">
+          {!localStream && !isOwner && (
+            <button
+              onClick={startScreenShare}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+            >
+              Start Sharing
+            </button>
+          )}
           <button
             onClick={endSession}
-            className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm transition-colors"
+            className="bg-red-600/90 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-red-600/20 active:scale-95 transition-all"
           >
             Disconnect
           </button>
