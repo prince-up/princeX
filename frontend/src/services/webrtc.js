@@ -14,7 +14,13 @@ class WebRTCService {
       this.iceServers = response.data.iceServers;
     } catch (error) {
       console.error('Failed to fetch ICE servers:', error);
-      this.iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+      this.iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+      ];
     }
   }
 
@@ -44,7 +50,7 @@ class WebRTCService {
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
     socketService.sendOffer(sessionId, offer);
-    
+
     return offer;
   }
 
@@ -57,7 +63,7 @@ class WebRTCService {
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
     socketService.sendAnswer(sessionId, answer);
-    
+
     return answer;
   }
 
@@ -84,7 +90,7 @@ class WebRTCService {
   createDataChannel(sessionId) {
     if (this.peerConnection) {
       this.dataChannel = this.peerConnection.createDataChannel('control');
-      
+
       this.dataChannel.onopen = () => {
         console.log('Data channel opened');
       };
