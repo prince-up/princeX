@@ -9,11 +9,13 @@ const SessionView = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const videoRef = useRef(null);
+
   const [isOwner, setIsOwner] = useState(false);
   const [connectionState, setConnectionState] = useState('connecting');
   const [localStream, setLocalStream] = useState(null);
   const [showControls, setShowControls] = useState(true);
   const [logs, setLogs] = useState([]);
+  const [isSupported] = useState(!!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
   const controlsTimeoutRef = useRef(null);
 
   const addLog = (msg) => {
@@ -37,37 +39,40 @@ const SessionView = () => {
 
   const initializeSession = async () => {
     try {
-      addLog('Initializing session...');
+      addLog('Initializing...');
+
       // Initialize WebRTC
       await webrtcService.initialize();
-      addLog('WebRTC initialized');
+      addLog('WebRTC Ready');
 
       // Connect socket
       socketService.connect();
       socketService.joinRoom(sessionId, 'participant');
-      addLog('Socket connected');
+      addLog('Socket Connected');
 
-      // Set up WebRTC listeners
+      // Set up listeners
       setupWebRTCListeners();
-
-      // Set up socket listeners
       setupSocketListeners();
 
-      // Check if Chrome extension is installed
-      window.postMessage({ type: 'PRINCEX_CHECK' }, '*');
+      // Determine Role
+      const userRole = state?.role || 'participant';
+      addLog(`Role: ${userRole}`);
 
-      // Auto-start if triggered from Dashboard
-      if (state?.autoStart) {
-        addLog('Auto-starting screen share...');
-        // Small delay to ensure everything is ready
-        setTimeout(() => startScreenShare(), 1000);
+      // Auto-start if Host
+      if (userRole === 'owner' || state?.autoStart) {
+        if (isSupported) {
+          addLog('Host: Auto-starting...');
+          setTimeout(() => startScreenShare(), 1000);
+        } else {
+          addLog('Error: Sharing not supported');
+        }
       } else {
-        addLog('Ready. Waiting for connection...');
+        addLog('Controller: Waiting for Host...');
       }
 
     } catch (error) {
       console.error('Session init error:', error);
-      addLog(`Init Error: ${error.message}`);
+      addLog(`Error: ${error.message}`);
       alert('Failed to initialize session');
       navigate('/owner');
     }
@@ -77,7 +82,7 @@ const SessionView = () => {
     const pc = webrtcService.createPeerConnection(sessionId);
 
     pc.ontrack = (event) => {
-      addLog('Received remote track');
+      addLog('Video Received');
       if (videoRef.current) {
         videoRef.current.srcObject = event.streams[0];
       }
@@ -90,68 +95,58 @@ const SessionView = () => {
 
     pc.onconnectionstatechange = () => {
       setConnectionState(pc.connectionState);
-      addLog(`Conn: ${pc.connectionState}`);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        // Keep logs visible if disconnected
-        setShowControls(true);
-      }
+      addLog(`State: ${pc.connectionState}`);
     };
   };
 
   const setupSocketListeners = () => {
     socketService.on('offer', async ({ offer }) => {
-      addLog('Received Offer');
+      addLog('Offer Received');
       await webrtcService.handleOffer(sessionId, offer);
       setIsOwner(false);
     });
 
     socketService.on('answer', async ({ answer }) => {
-      addLog('Received Answer');
+      addLog('Answer Received');
       await webrtcService.handleAnswer(answer);
     });
 
     socketService.on('ice-candidate', async ({ candidate }) => {
-      addLog('Received ICE Candidate');
       await webrtcService.handleICECandidate(candidate);
     });
 
     socketService.on('session-ended', () => {
-      addLog('Session Ended');
+      addLog('Ended');
       alert('Session ended');
       navigate('/owner');
     });
 
     socketService.on('user-joined', () => {
-      addLog('User Joined');
-      // If we are the host and someone joins, we start sharing
-      // But we check if we already have a stream to avoid redundant requests
-      if (!localStream) {
+      addLog('Guest Joined');
+      // If we are host and guest joins, share
+      if (!localStream && isSupported && (state?.role === 'owner' || isOwner)) {
         startScreenShare();
       }
     });
 
-    // Handle remote control events (Host side)
     socketService.on('control-event', ({ event }) => {
-      console.log('Received control event:', event);
-
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-
       window.postMessage({
         type: 'PRINCEX_CONTROL_EVENT',
         eventType: event.type,
-        data: {
-          ...event,
-          width: viewportWidth,
-          height: viewportHeight
-        }
+        data: { ...event, width: viewportWidth, height: viewportHeight }
       }, '*');
     });
   };
 
   const startScreenShare = async () => {
+    if (!isSupported) {
+      alert('Sharing is not supported on this browser/device.');
+      return;
+    }
     try {
-      addLog('Starting Share...');
+      addLog('Opening Share UI...');
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: "always" },
         audio: false
@@ -160,28 +155,23 @@ const SessionView = () => {
       setLocalStream(stream);
       await webrtcService.addVideoStream(stream);
       await webrtcService.createOffer(sessionId);
-      addLog('Offer Sent');
+      addLog('Sharing Active');
       setIsOwner(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      stream.getVideoTracks()[0].onended = () => {
-        endSession();
-      };
+      stream.getVideoTracks()[0].onended = () => endSession();
 
     } catch (error) {
-      console.error('Screen share error:', error);
-      addLog(`Error: ${error.message}`);
-      if (error.name !== 'NotAllowedError') {
-        alert('Failed to start sharing: ' + error.message);
-      }
+      console.error('Share error:', error);
+      addLog(`Fail: ${error.message}`);
     }
   };
 
   const handleMouseClick = (e) => {
-    if (!isOwner && videoRef.current) {
+    if (!isOwner && videoRef.current && videoRef.current.srcObject) {
       const rect = videoRef.current.getBoundingClientRect();
       const videoRatio = videoRef.current.videoWidth / videoRef.current.videoHeight;
       const elementRatio = rect.width / rect.height;
@@ -247,40 +237,53 @@ const SessionView = () => {
           className={`w-full h-full object-contain ${!isOwner ? 'cursor-none' : ''}`}
           onClick={handleMouseClick}
         />
+        {!isOwner && !videoRef.current?.srcObject && connectionState === 'connecting' && (
+          <div className="text-white/50 text-center animate-pulse">
+            <p className="text-xl font-medium">Waiting for Host Screen...</p>
+            <p className="text-sm mt-2">The session will start as soon as the host shares.</p>
+          </div>
+        )}
       </div>
 
       <div
-        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/90 to-transparent flex justify-between items-start transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <div className="pointer-events-auto">
-          <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 text-white min-w-[150px]">
-            <h2 className="text-sm font-bold tracking-tight">PrinceX</h2>
-            <div className="mt-1 flex flex-col gap-1">
-              <p className="text-[10px] text-green-400 flex items-center gap-1 font-medium uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+          <div className="bg-black/80 backdrop-blur-xl p-4 rounded-2xl border border-white/5 shadow-2xl text-white min-w-[180px]">
+            <h2 className="text-base font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">PrinceX</h2>
+            <div className="mt-2 flex flex-col gap-1.5">
+              <p className="text-[10px] text-green-400 flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></span>
                 {connectionState}
               </p>
-              <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1">
+              <div className="mt-3 space-y-1 border-t border-white/10 pt-2">
                 {logs.map((log, i) => (
-                  <div key={i} className="text-[9px] text-gray-400 font-mono leading-tight">{log}</div>
+                  <div key={i} className="text-[9px] text-gray-400 font-mono leading-none">{log}</div>
                 ))}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-2">
-          {!localStream && !isOwner && (
+        <div className="pointer-events-auto flex items-center gap-3">
+          {isSupported && (state?.role === 'owner' || isOwner) && !localStream && (
             <button
               onClick={startScreenShare}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl shadow-indigo-600/30 active:scale-95 transition-all"
             >
               Start Sharing
             </button>
           )}
+
+          {!isSupported && (state?.role === 'owner') && (
+            <div className="bg-amber-500/20 text-amber-500 px-4 py-2 rounded-xl text-[10px] font-bold border border-amber-500/30">
+              DESKTOP REQUIRED TO SHARE
+            </div>
+          )}
+
           <button
             onClick={endSession}
-            className="bg-red-600/90 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-red-600/20 active:scale-95 transition-all"
+            className="bg-white/10 hover:bg-red-600 text-white px-6 py-3 rounded-2xl text-sm font-black backdrop-blur-md border border-white/10 active:scale-95 transition-all"
           >
             Disconnect
           </button>

@@ -52,7 +52,7 @@ const OwnerDashboard = () => {
       // Listen for controller joining
       socketService.on('user-joined', () => {
         console.log('Controller joined, navigating to session...');
-        navigate(`/session/${sessionId}`, { state: { autoStart: true } });
+        navigate(`/session/${sessionId}`, { state: { autoStart: true, role: 'owner' } });
       });
 
       setQRData(response.data.session);
