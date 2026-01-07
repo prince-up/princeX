@@ -32,6 +32,7 @@ const OwnerDashboard = () => {
 
   const createInstantSession = async () => {
     try {
+      console.log('Creating session with device:', device);
       const response = await sessionAPI.createInstant({
         deviceId: device._id,
         permissions: {
@@ -40,10 +41,12 @@ const OwnerDashboard = () => {
           keyboardControl: true,
         },
       });
+      console.log('Session created:', response.data);
       setQRData(response.data.session);
       setShowQR(true);
     } catch (error) {
-      alert('Failed to create session');
+      console.error('Session creation error:', error);
+      alert('Failed to create session: ' + (error.response?.data?.message || error.message));
     }
   };
 
