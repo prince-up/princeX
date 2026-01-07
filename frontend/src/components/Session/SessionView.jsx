@@ -11,6 +11,14 @@ const SessionView = () => {
   const [isOwner, setIsOwner] = useState(false);
   const [connectionState, setConnectionState] = useState('connecting');
   const [localStream, setLocalStream] = useState(null);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef(null);
+
+  const handleUserInteraction = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+  };
 
   useEffect(() => {
     initializeSession();
@@ -198,21 +206,28 @@ const SessionView = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-black overflow-hidden flex flex-col relative">
+    <div
+      className="h-screen w-screen bg-black overflow-hidden flex flex-col relative"
+      onMouseMove={handleUserInteraction}
+      onTouchStart={handleUserInteraction}
+    >
       {/* Video - Full Screen */}
       <div className="absolute inset-0 flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          className={`max-w-full max-h-full object-contain ${!isOwner ? 'cursor-crosshair' : ''}`}
+          className={`w-full h-full object-contain ${!isOwner ? 'cursor-none' : ''}`}
+          style={{ objectFit: 'contain' }}
           onMouseMove={handleMouseMove}
           onClick={handleMouseClick}
         />
       </div>
 
-      {/* Floating Controls Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-start pointer-events-none">
+      {/* Floating Controls Overlay - Auto Hide */}
+      <div
+        className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-start transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      >
         <div className="pointer-events-auto">
           <div className="bg-black/50 backdrop-blur-sm p-2 rounded-lg text-white">
             <h2 className="text-sm font-bold">PrinceX</h2>
@@ -228,19 +243,10 @@ const SessionView = () => {
             onClick={endSession}
             className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm transition-colors"
           >
-            Stop
+            Disconnect
           </button>
         </div>
       </div>
-
-      {/* Hint for Controller */}
-      {!isOwner && (
-        <div className="absolute bottom-10 left-0 right-0 text-center pointer-events-none opacity-50">
-          <p className="text-white bg-black/30 inline-block px-4 py-1 rounded-full text-xs">
-            Tap screen to click
-          </p>
-        </div>
-      )}
     </div>
   );
 };
