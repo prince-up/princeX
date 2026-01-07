@@ -14,22 +14,23 @@ const initializeSignaling = (io) => {
     socket.on('join-room', async ({ sessionId, role }) => {
       try {
         const session = await Session.findById(sessionId);
-        
+
         if (!session || !session.isValid()) {
           socket.emit('error', { message: 'Invalid session' });
           return;
         }
 
         // Join Socket.IO room
+        socket.sessionRoom = session.socketRoomId;
         await socket.join(session.socketRoomId);
-        
+
         // Notify room
         socket.to(session.socketRoomId).emit('user-joined', {
           socketId: socket.id,
           role,
         });
 
-        logger.info(`Socket ${socket.id} joined room ${session.socketRoomId} as ${role}`);
+        logger.info(`Socket ${socket.id} joined room ${socket.sessionRoom} as ${role}`);
       } catch (error) {
         logger.error(`Join room error: ${error.message}`);
         socket.emit('error', { message: 'Failed to join room' });
@@ -39,53 +40,63 @@ const initializeSignaling = (io) => {
     /**
      * WebRTC Signaling: Offer
      */
-    socket.on('offer', ({ sessionId, offer }) => {
-      socket.to(sessionId).emit('offer', {
-        offer,
-        from: socket.id,
-      });
-      logger.info(`Offer sent in room ${sessionId}`);
+    socket.on('offer', ({ offer }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('offer', {
+          offer,
+          from: socket.id,
+        });
+        logger.info(`Offer sent in room ${socket.sessionRoom}`);
+      }
     });
 
     /**
      * WebRTC Signaling: Answer
      */
-    socket.on('answer', ({ sessionId, answer }) => {
-      socket.to(sessionId).emit('answer', {
-        answer,
-        from: socket.id,
-      });
-      logger.info(`Answer sent in room ${sessionId}`);
+    socket.on('answer', ({ answer }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('answer', {
+          answer,
+          from: socket.id,
+        });
+        logger.info(`Answer sent in room ${socket.sessionRoom}`);
+      }
     });
 
     /**
      * WebRTC Signaling: ICE Candidate
      */
-    socket.on('ice-candidate', ({ sessionId, candidate }) => {
-      socket.to(sessionId).emit('ice-candidate', {
-        candidate,
-        from: socket.id,
-      });
+    socket.on('ice-candidate', ({ candidate }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('ice-candidate', {
+          candidate,
+          from: socket.id,
+        });
+      }
     });
 
     /**
      * Remote Control: Mouse/Keyboard Events
      */
-    socket.on('control-event', ({ sessionId, event }) => {
-      socket.to(sessionId).emit('control-event', {
-        event,
-        from: socket.id,
-      });
+    socket.on('control-event', ({ event }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('control-event', {
+          event,
+          from: socket.id,
+        });
+      }
     });
 
     /**
      * Session end notification
      */
-    socket.on('end-session', ({ sessionId }) => {
-      socket.to(sessionId).emit('session-ended', {
-        from: socket.id,
-      });
-      logger.info(`Session ${sessionId} ended by ${socket.id}`);
+    socket.on('end-session', () => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('session-ended', {
+          from: socket.id,
+        });
+        logger.info(`Session in room ${socket.sessionRoom} ended by ${socket.id}`);
+      }
     });
 
     /**
