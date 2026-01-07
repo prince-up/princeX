@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PrinceX Extension</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PrinceX</h1>
+      <p class="tagline">Remote Control, Reinvented</p>
+    </div>
+
+    <div class="status" id="status">
+      <div class="status-indicator"></div>
+      <span id="statusText">Ready</span>
+    </div>
+
+    <div class="info">
+      <h3>Quick Guide:</h3>
+      <ol>
+        <li>Open <a href="http://localhost:5173" target="_blank">PrinceX Web App</a></li>
+        <li>Login to your account</li>
+        <li>Generate QR code or join session</li>
+        <li>Extension will handle screen capture</li>
+      </ol>
+    </div>
+
+    <div class="actions">
+      <button id="openApp" class="btn btn-primary">Open PrinceX</button>
+    </div>
+
+    <div class="footer">
+      <p>Version 1.0.0</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
