@@ -32,27 +32,7 @@ class WebRTCService {
     this.peerConnection.onconnectionstatechange = () => {
       console.log('Connection state:', this.peerConnection.connectionState);
     };
-# Terminal 1: Backend चल रहा है ✅
-# Terminal 2: Frontend चल रहा है ✅
 
-# अब करो:
-1. Chrome खोलो → http://localhost:5173
-2. Register करो (user1@test.com)
-3. Owner Dashboard → Generate QR
-4. Session Token copy करो (inst_xxxxxx)
-
-# नई Incognito Window:
-5. http://localhost:5173
-6. Register करो (user2@test.com)  
-7. Controller Dashboard
-8. Token paste करो
-9. Join क्लिक करो
-
-# पहली window में:
-10. Screen share permission accept करो
-
-# दूसरी window में:
-11. Screen दिखने लगेगी! ✅
     return this.peerConnection;
   }
 

@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Open PrinceX web app
   openAppBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'http://localhost:5173' });
+    // Use production URL if available, fallback to localhost
+    const appUrl = 'https://princex-frontend-xxxxx.vercel.app'; // Replace with your Vercel URL
+    chrome.tabs.create({ url: appUrl });
   });
 });

@@ -1,5 +1,7 @@
 import { io } from 'socket.io-client';
 
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 class SocketService {
   constructor() {
     this.socket = null;
@@ -7,7 +9,7 @@ class SocketService {
 
   connect() {
     if (!this.socket) {
-      this.socket = io('http://localhost:5000', {
+      this.socket = io(SOCKET_URL, {
         auth: {
           token: localStorage.getItem('token'),
         },
