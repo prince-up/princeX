@@ -67,30 +67,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Handle control events (mouse/keyboard) - Limited browser scope
+// Handle control events (mouse/keyboard)
 window.addEventListener('message', (event) => {
   if (event.data.type === 'PRINCEX_CONTROL_EVENT') {
     const { eventType, data } = event.data;
-    
-    // Note: Browser extensions have limited control capabilities
-    // Full OS-level control requires native app
-    console.log('[PrinceX] Control event:', eventType, data);
-    
-    // Simulate events within browser context (limited)
-    if (eventType === 'mouseclick') {
-      simulateMouseClick(data.x, data.y, data.button);
-    }
+
+    // Forward to background for Debugger API execution
+    chrome.runtime.sendMessage({
+      type: 'SIMULATE_INPUT',
+      data: {
+        eventType,
+        data
+      }
+    });
   }
 });
-
-function simulateMouseClick(x, y, button) {
-  // Convert normalized coordinates to screen coordinates
-  const screenX = x * window.innerWidth;
-  const screenY = y * window.innerHeight;
-
-  const element = document.elementFromPoint(screenX, screenY);
-  if (element) {
-    element.click();
-  }
-}
 
 console.log('[PrinceX] Content script ready');

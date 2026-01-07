@@ -6,7 +6,8 @@
   "permissions": [
     "desktopCapture",
     "activeTab",
-    "storage"
+    "storage",
+    "debugger"
   ],
   "host_permissions": [
     "http://localhost:5173/*",
@@ -26,7 +27,9 @@
         "https://*.onrender.com/*",
         "https://*.railway.app/*"
       ],
-      "js": ["content/content-script.js"],
+      "js": [
+        "content/content-script.js"
+      ],
       "run_at": "document_start"
     }
   ],
@@ -35,8 +38,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content/content-script.js"],
-      "matches": ["http://localhost:5173/*"]
+      "resources": [
+        "content/content-script.js"
+      ],
+      "matches": [
+        "http://localhost:5173/*"
+      ]
     }
   ]
 }

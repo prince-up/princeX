@@ -88,6 +88,26 @@ const SessionView = () => {
       console.log('Another user joined');
       startScreenShare();
     });
+
+    // Handle remote control events (Host side)
+    socketService.on('control-event', ({ event }) => {
+      console.log('Received control event:', event);
+
+      // Pass to extension for execution
+      // We need viewport dimensions to map coordinates accurately if they are normalized
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      window.postMessage({
+        type: 'PRINCEX_CONTROL_EVENT',
+        eventType: event.type,
+        data: {
+          ...event,
+          width: viewportWidth,
+          height: viewportHeight
+        }
+      }, '*');
+    });
   };
 
   const startScreenShare = async () => {
@@ -127,17 +147,22 @@ const SessionView = () => {
   };
 
   const handleMouseMove = (e) => {
-    if (!isOwner) {
-      const rect = videoRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top) / rect.height;
-
-      socketService.sendControlEvent(sessionId, {
-        type: 'mousemove',
-        x,
-        y,
-      });
-    }
+    // Optimization: Don't send every mouse move to avoid flooding socket/debugger
+    // Only send distinct moves or implement throttling if needed. 
+    // For now, skipping generic mouse moves to focus on clicks/interaction.
+    /*
+     if (!isOwner) {
+       const rect = videoRef.current.getBoundingClientRect();
+       const x = (e.clientX - rect.left) / rect.width;
+       const y = (e.clientY - rect.top) / rect.height;
+ 
+       socketService.sendControlEvent(sessionId, {
+         type: 'mousemove',
+         x,
+         y,
+       });
+     }
+     */
   };
 
   const handleMouseClick = (e) => {
@@ -173,47 +198,49 @@ const SessionView = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      {/* Header */}
-      <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold">PrinceX Session</h2>
-          <p className="text-sm text-gray-400">
-            Status: <span className={connectionState === 'connected' ? 'text-green-400' : 'text-yellow-400'}>
-              {connectionState}
-            </span>
-            {' | '}
-            Role: {isOwner ? 'Owner' : 'Controller'}
-          </p>
-        </div>
-        <button
-          onClick={endSession}
-          className="bg-red-600 px-4 py-2 rounded hover:bg-red-700"
-        >
-          End Session
-        </button>
-      </div>
-
-      {/* Video */}
-      <div className="flex-1 flex items-center justify-center p-4">
+    <div className="h-screen w-screen bg-black overflow-hidden flex flex-col relative">
+      {/* Video - Full Screen */}
+      <div className="absolute inset-0 flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          className="max-w-full max-h-full rounded-lg shadow-2xl cursor-crosshair"
+          className={`max-w-full max-h-full object-contain ${!isOwner ? 'cursor-crosshair' : ''}`}
           onMouseMove={handleMouseMove}
           onClick={handleMouseClick}
         />
       </div>
 
-      {/* Controls */}
-      <div className="bg-gray-900 text-white p-4 text-center">
-        <p className="text-sm">
-          {isOwner
-            ? '✓ Sharing your screen. Others can see and control it.'
-            : '✓ Connected. Click on the video to control the remote screen.'}
-        </p>
+      {/* Floating Controls Overlay */}
+      <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-start pointer-events-none">
+        <div className="pointer-events-auto">
+          <div className="bg-black/50 backdrop-blur-sm p-2 rounded-lg text-white">
+            <h2 className="text-sm font-bold">PrinceX</h2>
+            <p className="text-xs text-green-400 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              {connectionState}
+            </p>
+          </div>
+        </div>
+
+        <div className="pointer-events-auto">
+          <button
+            onClick={endSession}
+            className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm transition-colors"
+          >
+            Stop
+          </button>
+        </div>
       </div>
+
+      {/* Hint for Controller */}
+      {!isOwner && (
+        <div className="absolute bottom-10 left-0 right-0 text-center pointer-events-none opacity-50">
+          <p className="text-white bg-black/30 inline-block px-4 py-1 rounded-full text-xs">
+            Tap screen to click
+          </p>
+        </div>
+      )}
     </div>
   );
 };
