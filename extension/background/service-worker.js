@@ -51,51 +51,152 @@ async function handleSimulateInput(request, sender) {
       });
     }
 
-    if (eventType === 'mousemove') {
-      // Convert normalized coordinates to integer coordinates
-      // Note: This requires knowing the viewport size, which creates complexity.
-      // For now, simpler approach: we might not support mousemove via debugger efficiently due to missing layout metrics here.
-      // Focusing on Click which is more critical.
-    }
-
-    if (eventType === 'mouseclick') {
-      const x = Math.floor(data.x * data.width);
-      const y = Math.floor(data.y * data.height);
-
-      await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-        type: "mousePressed",
-        x: x,
-        y: y,
-        button: "left",
-        clickCount: 1
-      });
-
-      setTimeout(async () => {
-        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-          type: "mouseReleased",
-          x: x,
-          y: y,
-          button: "left",
-          clickCount: 1
-        });
-      }, 50);
-    }
-
-    if (eventType === 'keypress') {
-      // Basic character entry
-      await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-        type: "char",
-        text: data.key
-      });
+    // Handle different event types
+    switch (eventType) {
+      case 'mousemove':
+        await handleMouseMove(target, data);
+        break;
+      
+      case 'mouseclick':
+      case 'mousedown':
+      case 'mouseup':
+        await handleMouseEvent(target, eventType, data);
+        break;
+      
+      case 'wheel':
+        await handleWheelEvent(target, data);
+        break;
+      
+      case 'keydown':
+      case 'keyup':
+        await handleKeyboardEvent(target, eventType, data);
+        break;
     }
 
   } catch (error) {
     console.error('[Service Worker] Debugger error:', error);
-    // If attach failed (e.g. already attached), try to proceed or detach/reattach logic could go here
     if (error.message.includes("Already attached")) {
-      attachedTargets.add(sender.tab.id); // Sync state just in case
+      attachedTargets.add(sender.tab.id);
     }
   }
+}
+
+/**
+ * Handle mouse movement
+ */
+async function handleMouseMove(target, data) {
+  const x = Math.floor(data.x * data.width);
+  const y = Math.floor(data.y * data.height);
+
+  await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: x,
+    y: y,
+  });
+}
+
+/**
+ * Handle mouse click/down/up events
+ */
+async function handleMouseEvent(target, eventType, data) {
+  const x = Math.floor(data.x * data.width);
+  const y = Math.floor(data.y * data.height);
+  const button = data.button === 'left' ? 'left' : data.button === 'right' ? 'right' : 'middle';
+
+  if (eventType === 'mouseclick') {
+    // Press and release
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: x,
+      y: y,
+      button: button,
+      clickCount: 1
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: x,
+      y: y,
+      button: button,
+      clickCount: 1
+    });
+  } else if (eventType === 'mousedown') {
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: x,
+      y: y,
+      button: button,
+      clickCount: 1
+    });
+  } else if (eventType === 'mouseup') {
+    await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: x,
+      y: y,
+      button: button,
+      clickCount: 1
+    });
+  }
+}
+
+/**
+ * Handle wheel/scroll events
+ */
+async function handleWheelEvent(target, data) {
+  const x = Math.floor(data.x * data.width);
+  const y = Math.floor(data.y * data.height);
+
+  await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+    type: "mouseWheel",
+    x: x,
+    y: y,
+    deltaX: data.deltaX,
+    deltaY: data.deltaY,
+  });
+}
+
+/**
+ * Handle keyboard events
+ */
+async function handleKeyboardEvent(target, eventType, data) {
+  const type = eventType === 'keydown' ? 'keyDown' : 'keyUp';
+  
+  // Build modifiers
+  let modifiers = 0;
+  if (data.altKey) modifiers |= 1;
+  if (data.ctrlKey) modifiers |= 2;
+  if (data.metaKey) modifiers |= 4;
+  if (data.shiftKey) modifiers |= 8;
+
+  // Map common keys to their codes
+  const keyMap = {
+    'Enter': 13,
+    'Backspace': 8,
+    'Tab': 9,
+    'Escape': 27,
+    'ArrowUp': 38,
+    'ArrowDown': 40,
+    'ArrowLeft': 37,
+    'ArrowRight': 39,
+    'Delete': 46,
+    'Home': 36,
+    'End': 35,
+    'PageUp': 33,
+    'PageDown': 34,
+  };
+
+  const windowsVirtualKeyCode = keyMap[data.key] || data.keyCode;
+
+  await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+    type: type,
+    modifiers: modifiers,
+    windowsVirtualKeyCode: windowsVirtualKeyCode,
+    code: data.code,
+    key: data.key,
+    text: eventType === 'keydown' && data.key.length === 1 ? data.key : undefined,
+  });
 }
 
 /**

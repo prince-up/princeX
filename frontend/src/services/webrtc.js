@@ -6,6 +6,10 @@ class WebRTCService {
     this.peerConnection = null;
     this.dataChannel = null;
     this.iceServers = [];
+    this.localStream = null;
+    this.remoteStream = null;
+    this.statsInterval = null;
+    this.connectionQuality = 'good';
   }
 
   async initialize() {
@@ -27,6 +31,9 @@ class WebRTCService {
   createPeerConnection(sessionId) {
     this.peerConnection = new RTCPeerConnection({
       iceServers: this.iceServers,
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
     });
 
     this.peerConnection.onicecandidate = (event) => {
@@ -37,6 +44,17 @@ class WebRTCService {
 
     this.peerConnection.onconnectionstatechange = () => {
       console.log('Connection state:', this.peerConnection.connectionState);
+      if (this.peerConnection.connectionState === 'connected') {
+        this.startStatsMonitoring();
+      } else if (this.peerConnection.connectionState === 'disconnected' || 
+                 this.peerConnection.connectionState === 'failed') {
+        this.stopStatsMonitoring();
+      }
+    };
+
+    this.peerConnection.ontrack = (event) => {
+      console.log('Received remote track');
+      this.remoteStream = event.streams[0];
     };
 
     return this.peerConnection;
@@ -81,10 +99,48 @@ class WebRTCService {
 
   async addVideoStream(stream) {
     if (this.peerConnection) {
+      this.localStream = stream;
       stream.getTracks().forEach((track) => {
         this.peerConnection.addTrack(track, stream);
       });
     }
+  }
+
+  // Monitor connection quality
+  startStatsMonitoring() {
+    if (this.statsInterval) return;
+    
+    this.statsInterval = setInterval(async () => {
+      if (!this.peerConnection) return;
+      
+      const stats = await this.peerConnection.getStats();
+      stats.forEach((report) => {
+        if (report.type === 'inbound-rtp' && report.kind === 'video') {
+          const packetsLost = report.packetsLost || 0;
+          const packetsReceived = report.packetsReceived || 1;
+          const lossRate = packetsLost / (packetsLost + packetsReceived);
+          
+          if (lossRate > 0.1) {
+            this.connectionQuality = 'poor';
+          } else if (lossRate > 0.05) {
+            this.connectionQuality = 'fair';
+          } else {
+            this.connectionQuality = 'good';
+          }
+        }
+      });
+    }, 2000);
+  }
+
+  stopStatsMonitoring() {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+  }
+
+  getConnectionQuality() {
+    return this.connectionQuality;
   }
 
   createDataChannel(sessionId) {
@@ -119,14 +175,25 @@ class WebRTCService {
   }
 
   close() {
+    this.stopStatsMonitoring();
+    
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+    
     if (this.dataChannel) {
       this.dataChannel.close();
       this.dataChannel = null;
     }
+    
     if (this.peerConnection) {
       this.peerConnection.close();
       this.peerConnection = null;
     }
+    
+    this.remoteStream = null;
+    this.connectionQuality = 'good';
   }
 }
 

@@ -80,8 +80,37 @@ const initializeSignaling = (io) => {
      */
     socket.on('control-event', ({ event }) => {
       if (socket.sessionRoom) {
+        // Forward control event to the owner's browser
         socket.to(socket.sessionRoom).emit('control-event', {
           event,
+          from: socket.id,
+        });
+        
+        // Optional: Log control events for security/audit
+        logger.debug(`Control event: ${event.type} in room ${socket.sessionRoom}`);
+      }
+    });
+
+    /**
+     * Screen quality adjustment
+     */
+    socket.on('quality-change', ({ quality }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('quality-change', {
+          quality,
+          from: socket.id,
+        });
+        logger.info(`Quality changed to ${quality} in room ${socket.sessionRoom}`);
+      }
+    });
+
+    /**
+     * Connection quality feedback
+     */
+    socket.on('connection-stats', ({ stats }) => {
+      if (socket.sessionRoom) {
+        socket.to(socket.sessionRoom).emit('connection-stats', {
+          stats,
           from: socket.id,
         });
       }
