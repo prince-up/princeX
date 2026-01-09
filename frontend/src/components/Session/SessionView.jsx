@@ -66,22 +66,25 @@ const SessionView = () => {
 
       // Connect socket
       socketService.connect();
-      socketService.joinRoom(sessionId, 'participant');
+      
+      // Determine Role FIRST
+      const userRole = state?.role || 'controller';
+      const isHostRole = userRole === 'owner' || state?.autoStart;
+      setIsOwner(isHostRole);
+      addLog(`Role: ${userRole}`);
+      
+      // Join room with proper role
+      socketService.joinRoom(sessionId, userRole);
       addLog('Socket Connected');
 
       // Set up listeners
       setupWebRTCListeners();
       setupSocketListeners();
 
-      // Determine Role
-      const userRole = state?.role || 'participant';
-      addLog(`Role: ${userRole}`);
-
-      // Auto-start if Host
-      if (userRole === 'owner' || state?.autoStart) {
+      // Setup based on role (don't auto-start)
+      if (isHostRole) {
         if (isSupported) {
-          addLog('Host: Auto-starting...');
-          setTimeout(() => startScreenShare(), 1000);
+          addLog('Host: Ready to share');
         } else {
           addLog('Error: Sharing not supported');
         }
@@ -102,19 +105,28 @@ const SessionView = () => {
 
     pc.ontrack = (event) => {
       addLog('Video Received');
-      if (videoRef.current) {
+      console.log('Track received:', event.streams[0]);
+      if (videoRef.current && event.streams[0]) {
         videoRef.current.srcObject = event.streams[0];
+        // Force video play
+        videoRef.current.play().catch(e => console.log('Autoplay prevented:', e));
       }
       setConnectionState('connected');
     };
 
     pc.oniceconnectionstatechange = () => {
       addLog(`ICE: ${pc.iceConnectionState}`);
+      if (pc.iceConnectionState === 'failed') {
+        addLog('ICE Failed - Reconnecting...');
+      }
     };
 
     pc.onconnectionstatechange = () => {
       setConnectionState(pc.connectionState);
       addLog(`State: ${pc.connectionState}`);
+      if (pc.connectionState === 'failed') {
+        addLog('Connection failed');
+      }
     };
   };
 
@@ -528,9 +540,16 @@ const SessionView = () => {
         )}
 
         {!isOwner && !videoRef.current?.srcObject && connectionState === 'connecting' && (
-          <div className="text-white/50 text-center animate-pulse">
+          <div className="text-white/50 text-center animate-pulse space-y-4">
+            <div className="text-6xl mb-4">\ud83d\udd04</div>
             <p className="text-xl font-medium">Waiting for Host Screen...</p>
             <p className="text-sm mt-2">The session will start as soon as the host shares.</p>
+            <p className="text-xs mt-4 text-white/30">Connection Status: {connectionState}</p>
+            <div className="mt-6 flex gap-2 justify-center">
+              <div className="w-3 h-3 bg-white/50 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+              <div className="w-3 h-3 bg-white/50 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+              <div className="w-3 h-3 bg-white/50 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+            </div>
           </div>
         )}
       </div>
@@ -560,13 +579,16 @@ const SessionView = () => {
 
         <div className="pointer-events-auto flex items-center gap-3">
           {/* Remote Control Toggle (for controllers) */}
-          {!isOwner && videoRef.current?.srcObject && (
+          {!isOwner && (
             <button
               onClick={toggleRemoteControl}
+              disabled={!videoRef.current?.srcObject}
               className={`${
                 remoteControlEnabled 
                   ? 'bg-green-600 hover:bg-green-500' 
-                  : 'bg-gray-600 hover:bg-gray-500'
+                  : videoRef.current?.srcObject 
+                    ? 'bg-gray-600 hover:bg-gray-500'
+                    : 'bg-gray-800 opacity-50 cursor-not-allowed'
               } text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl active:scale-95 transition-all flex items-center gap-2`}
             >
               {remoteControlEnabled ? '🖱️ Control ON' : '🔒 Control OFF'}
@@ -633,7 +655,7 @@ const SessionView = () => {
       </div>
 
       {/* Mobile Controls */}
-      {isMobile && !isOwner && remoteControlEnabled && (
+      {isMobile && !isOwner && (
         <MobileControls
           onKeyPress={handleMobileKeyPress}
           onSpecialKey={handleMobileSpecialKey}

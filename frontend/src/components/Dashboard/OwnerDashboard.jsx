@@ -44,19 +44,24 @@ const OwnerDashboard = () => {
       });
       console.log('Session created:', response.data);
 
-      // Connect to socket and join room immediately
-      const sessionId = response.data.session._id;
-      socketService.connect();
-      socketService.joinRoom(sessionId, 'host');
+      const session = response.data.session;
+      const sessionId = session._id || session.id;
+      
+      console.log('Session ID:', sessionId);
 
-      // Listen for controller joining
-      socketService.on('user-joined', () => {
-        console.log('Controller joined, navigating to session...');
-        navigate(`/session/${sessionId}`, { state: { autoStart: true, role: 'owner' } });
-      });
-
-      setQRData(response.data.session);
+      // Show QR code first
+      setQRData(session);
       setShowQR(true);
+
+      // Connect to socket and join room
+      socketService.connect();
+      socketService.joinRoom(sessionId, 'owner');
+
+      // Navigate immediately so owner can start sharing
+      setTimeout(() => {
+        navigate(`/session/${sessionId}`, { state: { autoStart: false, role: 'owner' } });
+      }, 2000); // Give time to see QR code
+
     } catch (error) {
       console.error('Session creation error:', error);
       alert('Failed to create session: ' + (error.response?.data?.message || error.message));
@@ -139,25 +144,40 @@ const OwnerDashboard = () => {
         {showQR && qrData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-8 rounded-lg max-w-md w-full">
-              <h3 className="text-2xl font-bold mb-4">Scan QR Code</h3>
-              <div className="flex justify-center mb-4">
+              <h3 className="text-2xl font-bold mb-2 text-center">Scan to Control This PC</h3>
+              <p className="text-sm text-gray-500 mb-4 text-center">Redirecting to session in 2 seconds...</p>
+              <div className="flex justify-center mb-4 p-4 bg-gray-50 rounded-lg">
                 <QRCodeSVG
                   value={`${window.location.origin}/controller?token=${qrData.sessionToken}`}
                   size={256}
                 />
               </div>
-              <p className="text-sm text-gray-600 mb-2">
-                Session Token: <code className="bg-gray-100 px-2 py-1 rounded">{qrData.sessionToken}</code>
+              <div className="bg-indigo-50 p-4 rounded-lg mb-4">
+                <p className="text-xs text-gray-600 mb-1 font-semibold">Session Token:</p>
+                <code className="bg-white px-3 py-2 rounded block text-center font-mono text-sm break-all">
+                  {qrData.sessionToken}
+                </code>
+              </div>
+              <p className="text-xs text-gray-500 mb-4 text-center">
+                ⏱️ Expires: {new Date(qrData.expiresAt).toLocaleTimeString()}
               </p>
-              <p className="text-sm text-gray-600 mb-4">
-                Expires: {new Date(qrData.expiresAt).toLocaleString()}
-              </p>
-              <button
-                onClick={() => setShowQR(false)}
-                className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700"
-              >
-                Close
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    const sessionId = qrData._id || qrData.id;
+                    navigate(`/session/${sessionId}`, { state: { role: 'owner' } });
+                  }}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 font-semibold"
+                >
+                  Go to Session Now
+                </button>
+                <button
+                  onClick={() => setShowQR(false)}
+                  className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

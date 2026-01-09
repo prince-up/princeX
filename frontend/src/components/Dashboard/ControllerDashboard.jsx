@@ -45,9 +45,12 @@ const ControllerDashboard = () => {
         sessionToken: token,
         deviceId: device._id,
       });
-      navigate(`/session/${response.data.session.id}`, { state: { role: 'controller' } });
+      const sessionId = response.data.session._id || response.data.session.id;
+      console.log('Joined session:', sessionId);
+      navigate(`/session/${sessionId}`, { state: { role: 'controller' } });
     } catch (error) {
-      alert('Failed to join session: ' + (error.response?.data?.error || 'Unknown error'));
+      console.error('Join error:', error);
+      alert('Failed to join session: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -67,9 +70,12 @@ const ControllerDashboard = () => {
         sessionToken,
         deviceId: device._id,
       });
-      navigate(`/session/${response.data.session.id}`, { state: { role: 'controller' } });
+      const sessionId = response.data.session._id || response.data.session.id;
+      console.log('Joined session:', sessionId);
+      navigate(`/session/${sessionId}`, { state: { role: 'controller' } });
     } catch (error) {
-      alert('Failed to join session: ' + (error.response?.data?.error || 'Unknown error'));
+      console.error('Join error:', error);
+      alert('Failed to join session: ' + (error.response?.data?.error || error.message));
     }
   };
 
