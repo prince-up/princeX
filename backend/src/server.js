@@ -60,12 +60,23 @@ app.get('/api/ice-servers', (req, res) => {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      // Add TURN server if configured
-      ...(config.turnServer.username ? [{
-        urls: config.turnServer.url,
-        username: config.turnServer.username,
-        credential: config.turnServer.password,
-      }] : []),
+      { urls: 'stun:stun2.l.google.com:19302' },
+      // Free public TURN servers
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ],
   });
 });
